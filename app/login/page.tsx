@@ -1,7 +1,16 @@
 "use client";
+import { useState } from "react";
 import { supabase } from "../lib/supabase";
 
 export default function LoginPage() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -11,20 +20,70 @@ export default function LoginPage() {
     });
   };
 
+  const handleEmailAuth = async () => {
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    if (!email || !password) {
+      setError("Please fill in all fields");
+      setLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      setLoading(false);
+      return;
+    }
+
+    if (mode === "signup") {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name }
+        }
+      });
+      if (error) {
+        setError(error.message);
+      } else {
+        setSuccess("Account created! You can now sign in.");
+        setMode("login");
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        setError("Invalid email or password");
+      } else {
+        window.location.href = "/dashboard";
+      }
+    }
+    setLoading(false);
+  };
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white flex items-center justify-center px-6">
-      <div className="bg-white/10 rounded-2xl p-10 max-w-md w-full text-center">
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
 
-        <h1 className="text-4xl font-bold text-blue-400 mb-2">
-          SkillBridge AI
-        </h1>
-        <p className="text-blue-200 mb-8">
-          Sign in to save your progress and access all features
-        </p>
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-xl">S</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">SkillBridge AI</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {mode === "login" ? "Welcome back! Sign in to continue" : "Create your free account"}
+          </p>
+        </div>
 
+        {/* Google Login */}
         <button
           onClick={handleGoogleLogin}
-          className="w-full bg-white text-gray-800 font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition"
+          className="w-full border border-gray-300 hover:border-gray-400 rounded-lg py-3 px-4 flex items-center justify-center gap-3 transition mb-6"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -32,12 +91,108 @@ export default function LoginPage() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
-          Continue with Google
+          <span className="text-gray-700 font-medium text-sm">Continue with Google</span>
         </button>
 
-        <p className="text-blue-300 text-sm mt-6">
-          Free to use — no credit card required
+        {/* Divider */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex-1 h-px bg-gray-200"></div>
+          <span className="text-gray-400 text-sm">or</span>
+          <div className="flex-1 h-px bg-gray-200"></div>
+        </div>
+
+        {/* Tab Switch */}
+        <div className="flex bg-gray-100 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition ${mode === "login" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => { setMode("signup"); setError(""); setSuccess(""); }}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition ${mode === "signup" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}
+          >
+            Create Account
+          </button>
+        </div>
+
+        {/* Form */}
+        <div className="space-y-4">
+
+          {/* Name field (signup only) */}
+          {mode === "signup" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                placeholder="e.g. Kasun Perera"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input
+              type="email"
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="you@university.lk"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input
+              type="password"
+              className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              placeholder="Minimum 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleEmailAuth()}
+            />
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Success */}
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <p className="text-green-600 text-sm">{success}</p>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            onClick={handleEmailAuth}
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-lg text-sm font-medium transition"
+          >
+            {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
+          </button>
+
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-gray-400 mt-6">
+          By continuing, you agree to our Terms of Service and Privacy Policy.
         </p>
+
+        <p className="text-center text-sm text-gray-500 mt-4">
+          <a href="/" className="text-blue-600 hover:underline">← Back to home</a>
+        </p>
+
       </div>
     </main>
   );
