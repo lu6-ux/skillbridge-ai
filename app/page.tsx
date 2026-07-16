@@ -8,7 +8,7 @@ export default function Home() {
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">S</span>
           </div>
-          <span className="text-xl font-bold text-gray-900">SkillBridge <span className="text-blue-600">AI</span></span>
+          <span className="text-xl font-bold text-gray-900">SkillBridge  <span className="text-blue-600">AI  Sri Lanka</span></span>
         </div>
         <div className="hidden md:flex items-center gap-6">
           <a href="/roadmap" className="text-sm text-gray-600 hover:text-blue-600 transition">Roadmap</a>
