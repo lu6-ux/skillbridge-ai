@@ -51,6 +51,9 @@ export default function Dashboard() {
         <button onClick={handleLogout} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full text-sm">
           Logout
         </button>
+        <a href="/profile" className="text-sm text-blue-600 hover:underline font-medium">
+  My Profile
+</a>
       </div>
       <div className="max-w-2xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
         {features.map((feature, i) => (
