@@ -1,5 +1,4 @@
-import { District, JobFilterOption } from "@/app/data/sriLankaJobIntelligence";
-
+import { JobFilterOption } from "@/app/data/sriLankaJobIntelligence";
 interface JobFiltersProps {
   province: string;
   district: string;
