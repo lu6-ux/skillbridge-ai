@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentUser } from "../lib/auth";
 
 export default function PortfolioPage() {
   const [form, setForm] = useState({
@@ -13,6 +14,11 @@ export default function PortfolioPage() {
   });
   const [portfolio, setPortfolio] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGuest, setIsGuest] = useState(true);
+
+  useEffect(() => {
+    setIsGuest(!getCurrentUser());
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -35,8 +41,54 @@ export default function PortfolioPage() {
     setLoading(false);
   };
 
+  const downloadPdf = () => {
+    if (!portfolio) return;
+
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+
+    if (!printWindow) {
+      alert("Please allow pop-ups so the PDF preview can open.");
+      return;
+    }
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <head>
+          <title>${form.name || "Portfolio"} - PDF</title>
+          <style>
+            @page { size: A4; margin: 12mm; }
+            body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 24px; background: white; }
+            .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; box-shadow: none; }
+            h1 { font-size: 24px; margin-bottom: 8px; }
+            h2 { font-size: 16px; color: #2563eb; margin-top: 20px; margin-bottom: 8px; }
+            p { white-space: pre-wrap; line-height: 1.6; margin: 0; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>${(form.name || "My Portfolio").replace(/</g, "&lt;")}</h1>
+            <p>${(portfolio || "").replace(/</g, "&lt;").replace(/\n/g, "<br />")}</p>
+          </div>
+        </body>
+      </html>`;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white px-6 py-12">
+      {isGuest && (
+        <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="font-semibold">Guest mode is active</p>
+          <p className="mt-1">You can try the portfolio builder now. Create a free account to save your work and unlock more AI features.</p>
+        </div>
+      )}
 
       <h1 className="text-4xl font-bold text-center text-blue-400 mb-2">
         Portfolio Builder
@@ -137,12 +189,20 @@ export default function PortfolioPage() {
           <pre className="text-blue-100 whitespace-pre-wrap text-sm leading-relaxed">
             {portfolio}
           </pre>
-          <button
-            onClick={() => navigator.clipboard.writeText(portfolio)}
-            className="mt-6 w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg font-semibold transition"
-          >
-            Copy Portfolio Text 📋
-          </button>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              onClick={() => navigator.clipboard.writeText(portfolio)}
+              className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg font-semibold transition"
+            >
+              Copy Portfolio Text 📋
+            </button>
+            <button
+              onClick={downloadPdf}
+              className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-lg font-semibold transition"
+            >
+              Download as PDF 📄
+            </button>
+          </div>
         </div>
       )}
 

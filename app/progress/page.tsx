@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const skillCategories = [
   {
@@ -22,14 +22,63 @@ const skillCategories = [
 
 export default function ProgressPage() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [history, setHistory] = useState<number[]>([]);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem("skillbridge-progress-history");
+    const savedChecks = window.localStorage.getItem("skillbridge-progress-checklist");
+
+    if (raw) {
+      try {
+        setHistory(JSON.parse(raw));
+      } catch {
+        setHistory([]);
+      }
+    }
+
+    if (savedChecks) {
+      try {
+        setChecked(JSON.parse(savedChecks));
+      } catch {
+        setChecked({});
+      }
+    }
+  }, []);
 
   const toggleSkill = (skill: string) => {
-    setChecked((prev) => ({ ...prev, [skill]: !prev[skill] }));
+    setChecked((prev) => {
+      const nextValue = { ...prev, [skill]: !prev[skill] };
+      window.localStorage.setItem("skillbridge-progress-checklist", JSON.stringify(nextValue));
+      return nextValue;
+    });
+  };
+
+  const resetProgress = () => {
+    setChecked({});
+    window.localStorage.removeItem("skillbridge-progress-checklist");
+    setHistory((prev) => {
+      const nextHistory = prev.length ? [...prev, 0] : [0];
+      window.localStorage.setItem("skillbridge-progress-history", JSON.stringify(nextHistory));
+      return nextHistory;
+    });
   };
 
   const totalSkills = skillCategories.reduce((acc, cat) => acc + cat.skills.length, 0);
   const completedSkills = Object.values(checked).filter(Boolean).length;
   const percentage = Math.round((completedSkills / totalSkills) * 100);
+
+  useEffect(() => {
+    setHistory((prev) => {
+      const latest = prev[prev.length - 1];
+      if (latest === percentage) {
+        return prev;
+      }
+
+      const nextHistory = [...prev, percentage];
+      window.localStorage.setItem("skillbridge-progress-history", JSON.stringify(nextHistory));
+      return nextHistory;
+    });
+  }, [percentage]);
 
   const getScoreColor = () => {
     if (percentage >= 70) return "text-green-400";
@@ -38,30 +87,45 @@ export default function ProgressPage() {
   };
 
   const getScoreMessage = () => {
-    if (percentage >= 70) return "You are job ready! 🎉";
-    if (percentage >= 40) return "Good progress! Keep going! 💪";
-    return "Just getting started! You got this! 🚀";
+    if (percentage >= 70) return "You are moving toward job readiness! 🎉";
+    if (percentage >= 40) return "Nice momentum — keep building! 💪";
+    return "A strong foundation starts here — keep going! 🚀";
   };
+
+  const getMilestone = () => {
+    if (percentage >= 80) return "Career-ready milestone";
+    if (percentage >= 60) return "Strong preparation";
+    if (percentage >= 40) return "Steady growth";
+    return "Getting started";
+  };
+
+  const historySummary = useMemo(() => {
+    if (history.length === 0) return [];
+    return history.slice(-6);
+  }, [history]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white px-6 py-12">
 
       <h1 className="text-4xl font-bold text-center text-blue-400 mb-2">
-        Progress Tracker
+        Career Progress Tracker
       </h1>
       <p className="text-center text-blue-200 mb-10">
-        Track your career journey step by step
+        Track your growth, stay consistent, and turn preparation into momentum.
       </p>
 
-      {/* Score Card */}
       <div className="max-w-xl mx-auto bg-white/10 rounded-2xl p-8 mb-8 text-center">
-        <p className="text-blue-200 mb-2">Your Career Progress</p>
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-blue-200">Your Career Progress</p>
+          <span className="text-sm text-blue-300 bg-blue-500/20 px-3 py-1 rounded-full">
+            {getMilestone()}
+          </span>
+        </div>
         <p className={`text-7xl font-bold mb-2 ${getScoreColor()}`}>
           {percentage}%
         </p>
         <p className="text-lg text-blue-200">{getScoreMessage()}</p>
 
-        {/* Progress Bar */}
         <div className="mt-6 bg-white/10 rounded-full h-4">
           <div
             className="h-4 rounded-full transition-all duration-500"
@@ -72,8 +136,32 @@ export default function ProgressPage() {
           />
         </div>
         <p className="mt-2 text-sm text-blue-300">
-          {completedSkills} of {totalSkills} skills completed
+          {completedSkills} of {totalSkills} milestones completed
         </p>
+
+        <button
+          onClick={resetProgress}
+          className="mt-5 text-sm text-blue-100 underline hover:text-white"
+        >
+          Reset progress
+        </button>
+      </div>
+
+      <div className="max-w-xl mx-auto bg-white/10 rounded-2xl p-6 mb-8">
+        <h2 className="text-lg font-bold text-blue-400 mb-3">Progress history</h2>
+        <div className="flex items-end gap-2 h-32">
+          {historySummary.length > 0 ? historySummary.map((value, index) => (
+            <div key={`${value}-${index}`} className="flex-1 flex flex-col items-center">
+              <div
+                className="w-full rounded-t-lg bg-blue-400"
+                style={{ height: `${Math.max(12, value)}%` }}
+              />
+              <span className="mt-2 text-xs text-blue-200">W{index + 1}</span>
+            </div>
+          )) : (
+            <p className="text-sm text-blue-200">Your progress chart will appear here after you complete your first milestone.</p>
+          )}
+        </div>
       </div>
 
       {/* Skill Categories */}

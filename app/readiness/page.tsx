@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentUser } from "../lib/auth";
 
 export default function ReadinessPage() {
   const [form, setForm] = useState({
@@ -14,6 +15,11 @@ export default function ReadinessPage() {
   });
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGuest, setIsGuest] = useState(true);
+
+  useEffect(() => {
+    setIsGuest(!getCurrentUser());
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -23,19 +29,30 @@ export default function ReadinessPage() {
     setLoading(true);
     setResult("");
 
-    const res = await fetch("/api/readiness", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    try {
+      const res = await fetch("/api/readiness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    const data = await res.json();
-    setResult(data.result);
-    setLoading(false);
+      const data = await res.json();
+      setResult(data.result || "We could not generate your readiness score right now. Please try again shortly.");
+    } catch {
+      setResult("The readiness service is currently unavailable. Please try again shortly.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white px-6 py-12">
+      {isGuest && (
+        <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="font-semibold">Guest mode is active</p>
+          <p className="mt-1">You can try your readiness score now. Create a free account to save your report and unlock more AI features.</p>
+        </div>
+      )}
 
       <h1 className="text-4xl font-bold text-center text-blue-400 mb-2">
         Career Readiness Score

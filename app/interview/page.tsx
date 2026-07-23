@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getCurrentUser } from "../lib/auth";
 
 export default function InterviewPage() {
   const [stage, setStage] = useState<"setup" | "interview" | "finished">("setup");
@@ -12,37 +13,58 @@ export default function InterviewPage() {
   const [scores, setScores] = useState<string[]>([]);
   const [finalReport, setFinalReport] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isGuest, setIsGuest] = useState(true);
+
+  useEffect(() => {
+    setIsGuest(!getCurrentUser());
+  }, []);
+   
 
   const startInterview = async () => {
     if (!jobRole) return;
     setLoading(true);
 
-    const res = await fetch("/api/interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jobRole,
-        interviewType,
-        stage: "get_questions",
-      }),
-    });
-
-    const data = await res.json();
-    if (data.error) {
-      alert("Error: " + data.error);
-      setLoading(false);
-      return;
-    }
     try {
-      const parsed = JSON.parse(data.result);
-      setQuestions(parsed);
-      setStage("interview");
+      const res = await fetch("/api/interview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobRole,
+          interviewType,
+          stage: "get_questions",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setQuestions([
+          "Tell me about yourself and your interest in this role.",
+          "Describe a project that shows your strengths.",
+          "How would you handle a challenge in your first month?",
+        ]);
+        setStage("interview");
+        setLoading(false);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(data.result);
+        setQuestions(parsed);
+        setStage("interview");
+      } catch {
+        const lines = data.result.split("\n").filter((l: string) => l.trim());
+        setQuestions(lines.slice(0, 5));
+        setStage("interview");
+      }
     } catch {
-      const lines = data.result.split("\n").filter((l: string) => l.trim());
-      setQuestions(lines.slice(0, 5));
+      setQuestions([
+        "Tell me about yourself and your interest in this role.",
+        "Describe a project that shows your strengths.",
+        "How would you handle a challenge in your first month?",
+      ]);
       setStage("interview");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const submitAnswer = async () => {
@@ -50,44 +72,55 @@ export default function InterviewPage() {
     setLoading(true);
     setFeedback("");
 
-    const res = await fetch("/api/interview", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jobRole,
-        interviewType,
-        question: questions[currentQ],
-        answer,
-        stage: "evaluate_answer",
-      }),
-    });
-
-    const data = await res.json();
-    setFeedback(data.result);
-
-    const scoreMatch = data.result.match(/(\d+)\/10/);
-    if (scoreMatch) {
-      setScores(prev => [...prev, `Q${currentQ + 1}: ${scoreMatch[0]}`]);
-    }
-    setLoading(false);
-  };
-
-  const nextQuestion = async () => {
-    if (currentQ + 1 >= questions.length) {
-      setLoading(true);
+    try {
       const res = await fetch("/api/interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jobRole,
-          stage: "final_feedback",
-          answer: scores.join(", "),
+          interviewType,
+          question: questions[currentQ],
+          answer,
+          stage: "evaluate_answer",
         }),
       });
+
       const data = await res.json();
-      setFinalReport(data.result);
-      setStage("finished");
+      setFeedback(data.result || "Your answer was received. Feedback is temporarily unavailable right now.");
+
+      const scoreMatch = (data.result || "").match(/(\d+)\/10/);
+      if (scoreMatch) {
+        setScores(prev => [...prev, `Q${currentQ + 1}: ${scoreMatch[0]}`]);
+      }
+    } catch {
+      setFeedback("Feedback is temporarily unavailable. Please try again shortly.");
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const nextQuestion = async () => {
+    if (currentQ + 1 >= questions.length) {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/interview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobRole,
+            stage: "final_feedback",
+            answer: scores.join(", "),
+          }),
+        });
+        const data = await res.json();
+        setFinalReport(data.result || "Your interview summary is temporarily unavailable.");
+        setStage("finished");
+      } catch {
+        setFinalReport("Your interview summary is temporarily unavailable. Please try again shortly.");
+        setStage("finished");
+      } finally {
+        setLoading(false);
+      }
     } else {
       setCurrentQ(prev => prev + 1);
       setAnswer("");
@@ -97,6 +130,12 @@ export default function InterviewPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 text-white px-6 py-12">
+      {isGuest && (
+        <div className="mx-auto mb-6 max-w-xl rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+          <p className="font-semibold">Guest mode is active</p>
+          <p className="mt-1">You can try a few interview questions now. Create a free account to save your practice session and unlock more AI features.</p>
+        </div>
+      )}
       <h1 className="text-4xl font-bold text-center text-blue-400 mb-2">
         Mock Interview Simulator
       </h1>

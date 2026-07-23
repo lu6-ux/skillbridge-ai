@@ -1,12 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { getCurrentUser, signOut } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 
 interface Skill {
   name: string;
   level: number;
 }
-
 interface Profile {
   full_name: string;
   university: string;
@@ -14,6 +14,9 @@ interface Profile {
   career_goal: string;
   academic_year: string;
   skills: Skill[];
+  cv_url?: string;
+  cv_filename?: string;
+  cv_analysis?: string;
 }
 
 const DEFAULT_SKILLS = [
@@ -35,30 +38,97 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [newSkill, setNewSkill] = useState("");
+  const [cvFile, setCvFile] = useState<File | null>(null);
+const [cvUploading, setCvUploading] = useState(false);
+const [cvAnalysis, setCvAnalysis] = useState("");
+const [cvAnalyzing, setCvAnalyzing] = useState(false);
+const [cvUrl, setCvUrl] = useState("");
+const [cvFilename, setCvFilename] = useState("");
+
+const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const getProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = "/login"; return; }
-      setUser(user);
-      const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-      if (data) {
-        setProfile({
-          full_name: data.full_name ?? "",
-          university: data.university ?? "",
-          field_of_study: data.field_of_study ?? "",
-          career_goal: data.career_goal ?? "",
-          academic_year: data.academic_year ?? "2nd Year",
-          skills: data.skills ?? DEFAULT_SKILLS.map(name => ({ name, level: 0 })),
-        });
-      } else {
-        setProfile(prev => ({ ...prev, full_name: user.user_metadata?.full_name ?? "" }));
-      }
-      setLoading(false);
-    };
-    getProfile();
-  }, []);
 
+  const getProfile = async () => {
+
+    const currentUser = getCurrentUser();
+
+    if (!currentUser) {
+      window.location.href = "/login";
+      return;
+    }
+
+    setUser(currentUser);
+
+    let data: any = null;
+    let error: any = null;
+
+    try {
+      const response = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .maybeSingle();
+
+      data = response.data;
+      error = response.error;
+    } catch (queryError) {
+      error = queryError;
+    }
+
+    if (data) {
+
+      setProfile({
+
+        full_name: data.full_name ?? "",
+
+        university: data.university ?? "",
+
+        field_of_study: data.field_of_study ?? "",
+
+        career_goal: data.career_goal ?? "",
+
+        academic_year: data.academic_year ?? "2nd Year",
+
+        skills: data.skills ?? DEFAULT_SKILLS.map(name => ({
+          name,
+          level: 0
+        }))
+
+      });
+
+
+      // Load CV details
+
+      setCvUrl(data.cv_url ?? "");
+
+      setCvFilename(data.cv_filename ?? "");
+
+      setCvAnalysis(data.cv_analysis ?? "");
+
+
+    } else {
+
+
+      setProfile(prev => ({
+        ...prev,
+        full_name: currentUser.name ?? ""
+      }));
+
+
+    }
+
+
+    setLoading(false);
+
+
+  };
+
+
+  getProfile();
+
+
+}, []);
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
@@ -96,7 +166,143 @@ export default function ProfilePage() {
 
   const getInitials = (name: string) =>
     name ? name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "?";
+ const handleCVUpload = async (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
 
+const file = e.target.files?.[0];
+
+if(!file || !user) return;
+
+
+if(file.type !== "application/pdf"){
+ alert("Only PDF files allowed");
+ return;
+}
+
+
+if(file.size > 5 * 1024 * 1024){
+ alert("Maximum size is 5MB");
+ return;
+}
+
+
+setCvUploading(true);
+setCvFile(file);
+
+
+// Upload CV
+const filePath = `${user.id}/cv.pdf`;
+
+
+const {error:uploadError}=await supabase.storage
+.from("cvs")
+.upload(filePath,file,{
+ upsert:true
+});
+
+
+if(uploadError){
+
+alert(uploadError.message);
+setCvUploading(false);
+return;
+
+}
+
+
+// Get URL
+
+const {data:urlData}=supabase.storage
+.from("cvs")
+.getPublicUrl(filePath);
+
+
+const url=urlData.publicUrl;
+
+
+setCvUrl(url);
+setCvFilename(file.name);
+
+
+// Save profile
+
+await supabase.from("profiles").upsert({
+
+id:user.id,
+
+cv_url:url,
+
+cv_filename:file.name,
+
+updated_at:new Date().toISOString()
+
+});
+
+
+setCvUploading(false);
+
+
+// AI ANALYSIS
+
+setCvAnalyzing(true);
+
+
+const reader=new FileReader();
+
+
+reader.onload=async()=>{
+
+const text=reader.result as string;
+
+
+const res=await fetch("/api/analyze-cv",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json"
+},
+
+body:JSON.stringify({
+cvText:text
+})
+
+});
+
+
+const data=await res.json();
+
+
+if(data.analysis){
+
+setCvAnalysis(data.analysis);
+
+
+await supabase.from("profiles").upsert({
+
+id:user.id,
+
+cv_analysis:data.analysis,
+
+updated_at:new Date().toISOString()
+
+});
+
+
+}
+
+
+setCvAnalyzing(false);
+
+
+};
+
+
+reader.readAsText(file);
+
+
+};
   if (loading) return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -117,7 +323,7 @@ export default function ProfilePage() {
         <div className="flex items-center gap-4">
           <a href="/dashboard" className="text-sm text-gray-600 hover:text-blue-600">Dashboard</a>
           <button
-            onClick={() => supabase.auth.signOut().then(() => window.location.href = "/login")}
+            onClick={() => signOut().then(() => window.location.href = "/login")}
             className="text-sm text-red-500 hover:text-red-600"
           >
             Sign out
@@ -304,6 +510,144 @@ export default function ProfilePage() {
         >
           {saving ? "Saving..." : "Save Profile"}
         </button>
+        {/* CV Upload Section */}
+
+<div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+
+
+<h3 className="text-base font-semibold text-gray-900">
+📄 My CV / Resume
+</h3>
+
+
+<div
+onClick={()=>fileInputRef.current?.click()}
+className="
+border-2 border-dashed border-gray-300 
+rounded-xl p-8 text-center cursor-pointer
+hover:border-blue-500
+"
+>
+
+
+<p className="text-4xl">
+📄
+</p>
+
+
+{
+cvFilename ?
+
+<p className="text-sm font-medium">
+{cvFilename}
+</p>
+
+:
+
+<p className="text-sm text-gray-600">
+Upload CV PDF
+</p>
+
+}
+
+
+{
+cvUploading &&
+<p className="text-blue-600 text-sm">
+Uploading...
+</p>
+}
+
+
+</div>
+
+
+
+<input
+
+ref={fileInputRef}
+
+type="file"
+
+accept=".pdf"
+
+className="hidden"
+
+onChange={handleCVUpload}
+
+/>
+
+
+
+{
+cvUrl &&
+
+<a
+
+href={cvUrl}
+
+target="_blank"
+
+className="
+block text-center border rounded-lg py-2
+text-sm text-blue-600
+"
+
+>
+
+View CV
+
+</a>
+
+}
+
+
+
+
+{
+cvAnalyzing &&
+
+<div className="bg-blue-50 p-4 rounded-xl text-center">
+
+🤖 AI analyzing your CV...
+
+</div>
+
+}
+
+
+
+
+{
+cvAnalysis && !cvAnalyzing &&
+
+<div className="
+bg-gray-50 rounded-xl p-4
+">
+
+<h4 className="font-semibold mb-3">
+
+🤖 AI CV Analysis
+
+</h4>
+
+
+<pre className="
+whitespace-pre-wrap text-sm
+">
+
+{cvAnalysis}
+
+</pre>
+
+
+</div>
+
+}
+
+
+
+</div>
 
         {/* Quick Links */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6">
